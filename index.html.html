@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go婆婆的故事 · 互動學習</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: "PingFang HK", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", sans-serif;
+    background: #0f0f1a;
+    color: #f0f0f5;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    padding-bottom: 3vh;
+    background: linear-gradient(135deg, #141e30 0%, #243b55 100%);
+    transition: background 0.8s ease;
+    cursor: pointer;
+  }
+
+  #chapter {
+    position: absolute;
+    top: 22px;
+    left: 28px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.42);
+    transition: opacity 0.4s;
+    z-index: 2;
+  }
+
+  #dialog {
+    position: relative;
+    width: min(94%, 960px);
+    max-height: 72vh;
+    overflow-y: auto;
+    background: rgba(10, 12, 24, 0.84);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 18px;
+    padding: 24px 32px 34px;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.45);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
+  }
+  #dialog::-webkit-scrollbar { width: 6px; }
+  #dialog::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+
+  #speaker {
+    font-size: 14px;
+    letter-spacing: 1px;
+    color: #7ee0c0;
+    margin-bottom: 10px;
+    min-height: 18px;
+  }
+
+  #text {
+    font-size: clamp(15px, 1.35vw, 20px);
+    line-height: 1.85;
+    letter-spacing: 0.4px;
+    color: #f0f0f5;
+    white-space: pre-line;
+  }
+
+  #hint {
+    position: absolute;
+    right: 24px;
+    bottom: 10px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    animation: breathe 1.8s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.85; }
+  }
+
+  #choices {
+    position: absolute;
+    left: 50%;
+    bottom: calc(3vh + 180px);
+    transform: translateX(-50%);
+    width: min(90%, 760px);
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 5;
+  }
+
+  .choice-btn {
+    width: 100%;
+    padding: 15px 22px;
+    font-size: clamp(14px, 1.2vw, 18px);
+    font-family: inherit;
+    letter-spacing: 0.4px;
+    color: #f0f0f5;
+    background: rgba(20, 24, 40, 0.9);
+    border: 1px solid rgba(126, 224, 192, 0.35);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.22s ease;
+    text-align: left;
+    line-height: 1.5;
+  }
+  .choice-btn:hover {
+    background: rgba(126, 224, 192, 0.14);
+    border-color: rgba(126, 224, 192, 0.85);
+    transform: translateX(6px);
+  }
+  .choice-btn:active { transform: translateX(6px) scale(0.99); }
+
+  #restart-btn {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    padding: 10px 28px;
+    font-size: 14px;
+    font-family: inherit;
+    letter-spacing: 1px;
+    color: rgba(255,255,255,0.75);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+  }
+  #restart-btn:hover {
+    background: rgba(255,255,255,0.16);
+    color: #fff;
+  }
+
+  @media (max-width: 600px) {
+    #dialog { padding: 18px 20px 28px; max-height: 68vh; }
+    #choices { bottom: calc(3vh + 160px); }
+    #chapter { font-size: 11px; top: 14px; left: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="chapter"></div>
+
+  <div id="choices"></div>
+
+  <div id="dialog">
+    <div id="speaker"></div>
+    <div id="text"></div>
+    <div id="hint"></div>
+  </div>
+
+  <button id="restart-btn">重新開始</button>
+</div>
+
+<script>
+/* ============================================================
+   故事數據 —— 按劇本整理，可自行修改
+   ============================================================ */
+
+const storyData = {
+
+  start: {
+    chapter: '開場 · 睇埋呢集先',
+    bg: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+    speaker: '',
+    text: `凌晨十二時十五分，客廳。
+
+（手機傳出AI霸道總裁劇對白）
+
+「我知你成日掛住照顧屋企人。今晚唔使你煮，我訂咗位，陪你食餐你鍾意嘅。」
+
+「你唔使次次都話『求其』，你鍾意食乜，我想知。」
+
+Go婆婆（微笑）：「呢個先識關心人，唔係淨係問人煮飯未。」
+
+阿寶：「婆婆，十二點喇，仲未瞓？聽朝約咗黃太飲茶喎。」
+
+Go婆婆（沒有移開視線）：「睇埋呢集先。佢終於約到個女主角食飯，唔知去唔去得成。」
+
+（一集播完，畫面出現「下一集」，自動播放倒數開始。Go婆婆繼續看。）`,
+    next: 'start2'
+  },
+
+  start2: {
+    speaker: '',
+    text: `阿寶旁白：最近，婆婆成日話「睇埋呢集」，但一集又一集。呢個星期，佢兩次冇去飲茶，朝早又話攰。我好心，但每次叫佢，我哋都會嗌交。
+
+（畫面停格）
+
+你是阿寶。你已經很疲倦，也擔心婆婆。第一句，你會怎樣？`,
+    choices: [
+      { text: 'A.「你又睇！你根本控制唔到自己！」', next: 'c1a', effect: { type: 'A' } },
+      { text: 'B.「我見你近排好夜，我有啲擔心。」', next: 'c1b', effect: { type: 'B' } }
+    ]
+  },
+
+  c1a: {
+    chapter: '片一 · 第一句點開口',
+    bg: 'linear-gradient(135deg, #2a1a1a 0%, #4a2020 100%)',
+    speaker: '',
+    text: `阿寶（語氣急躁）：「你又睇！日日都話最後一集，你根本控制唔到自己！」
+
+Go婆婆（把手機握緊）：「我睇下劇都唔得？你後生玩手機就得，我就有問題？」
+
+阿寶：「我係為你好！你日頭又唔起身噢喇！」
+
+Go婆婆：「唔使你理，我返房。」
+
+（Go婆婆拿著手機走入房間，關上門。）
+
+阿寶旁白：我想幫佢但幫到心噏，但佢唔領情，可能係我語氣嫌棄。`,
+    next: 's2_from_a'
+  },
+
+  c1b: {
+    chapter: '片一 · 第一句點開口',
+    bg: 'linear-gradient(135deg, #1a2a1a 0%, #204a20 100%)',
+    speaker: '',
+    text: `阿寶（坐在旁邊，不拿她的手機）：「婆婆，我見你近排好夜瞓，朝早又好攰。我有啲擔心你日頭冇精神。」
+
+Go婆婆：「我知啦，呢集真係就完。」
+
+阿寶：「我知你好想睇落去。你願唔願意先暫停，同我講兩句？如果而家唔想，我聽日下晝再傾十分鐘，好唔好？」
+
+Go婆婆：「聽日先啦。」
+
+阿寶：「好。咁今晚你覺得點樣停係做得到？」
+
+Go婆婆：「十二點半啦。」
+
+阿寶：「好，設個提示先。聽日我哋再一齊諗，點樣唔使晚晚咁。」
+
+—— 教學停格一 ——
+說出具體觀察及自己的擔心，邀請商量。
+「我見到...我擔心...你願唔願意...」
+取代「你成日...你根本...你一定要...」`,
+    next: 's2_from_b'
+  },
+
+  s2_from_a: {
+    chapter: '片二 · 婆婆喜歡的，不只是總裁',
+    bg: 'linear-gradient(135deg, #1e2a3a 0%, #2a4050 100%)',
+    speaker: '',
+    text: `翌日下午，飯廳。
+
+阿寶：「婆婆，昨晚我講得太急，話你控制唔到自己，對唔住。我係擔心，但唔想用呢個方式講。」
+
+（進入以下對話）`,
+    next: 's2_common'
+  },
+
+  s2_from_b: {
+    chapter: '片二 · 婆婆喜歡的，不只是總裁',
+    bg: 'linear-gradient(135deg, #1e2a3a 0%, #2a4050 100%)',
+    speaker: '',
+    text: `翌日下午，飯廳。`,
+    next: 's2_common'
+  },
+
+  s2_common: {
+    speaker: '',
+    text: `阿寶：「你琴晚話，個男主角關心人。係邊句令你覺得佢好？」
+
+Go婆婆：「佢問個女主角想食乜，唔係叫佢煮。咁多年，成日都係我問屋企人想食乜，好少有人問返我。」
+
+阿寶（停一停）：「原來你都想有人主動問你鍾意乜。」
+
+Go婆婆：「你哋個個都忙，我唔想成日煩住你哋。開住，有人講吓嘢，個屋冇咁靜。」
+
+阿寶：「你唔想打擾我哋，但夜晚一個人，又真係有啲悶。」
+
+Go婆婆：「係。明知係假，睇吓都開心。點知一開就一路睇，連時間都唔記得。」
+
+阿寶旁白：我之前只見到婆婆一直睇手機。而家先知，佢都想有人問吓、傾吓。但我亦要了解，睇劇已經影響佢生活幾多。
+
+（背景教育字幕：本案例需要了解的因素——夜晚孤單、家人忙碌、日間活動減少，以及自動播放、劇情懸念等觀看安排。）
+
+（Go婆婆的手機彈出「解鎖下集劇集：$38」）`,
+    next: 'c2'
+  },
+
+  c2: {
+    chapter: '片二 · 選擇二',
+    speaker: '',
+    text: `你想了解婆婆的作息、社交及付款情況。你會怎樣問？`,
+    choices: [
+      { text: 'A.「你究竟睇幾多個鐘？」', next: 'c2a', effect: { type: 'A' } },
+      { text: 'B.「我哋一齊睇下，有冇影響到你想做嘅事？」', next: 'c2b', effect: { type: 'B' } }
+    ]
+  },
+
+  c2a: {
+    bg: 'linear-gradient(135deg, #2a1a1a 0%, #4a2020 100%)',
+    speaker: '',
+    text: `阿寶：「你究竟一日睇幾多個鐘？畀咗幾多錢？上次又話冇課金，點解而家仲有付款？」
+
+Go婆婆：「我自己嘅嘢，唔使樣樣同你交代！」
+
+阿寶：「我只係想問清楚！」
+
+Go婆婆（把手機收起）：「冇嘢好講。」
+
+阿寶旁白：我問咗好多問題，但其實一樣都冇了解多到。`,
+    next: 's3_from_a'
+  },
+
+  c2b: {
+    bg: 'linear-gradient(135deg, #1a2a1a 0%, #204a20 100%)',
+    speaker: '',
+    text: `阿寶：「婆婆，你介唔介意我哋一齊睇下，最近睇劇有冇影響到你想做嘅事？唔係查你，我想知邊一樣最困擾你。」
+
+Go婆婆：「最困擾就係朝早好攰。」
+
+阿寶：「你通常諗住點停？最後又點先停到？」
+
+Go婆婆：「諗住十一點，但有時到一、兩點。」
+
+阿寶：「第二朝飲茶、買餸，係咪都難咗？」
+
+Go婆婆：「係。黃太都話我成日放飛機。」
+
+阿寶：「付款呢？有冇試過你唔清楚係買一集，定係每個月都扣？」
+
+Go婆婆：「我畀過一次，以為睇晒，之後又話要畀。我都唔明。」
+
+阿寶：「如果你願意，我陪你睇清楚付款紀錄。你自己開嚟畀我睇，每一步我先講清楚，我唔會自己亂刪。」
+
+Go婆婆：「好，你教我睇。」
+
+—— 教學停格二 ——
+先取得同意，再由婆婆最在意的影響切入。逐步了解睡眠、日常安排、社交、付款及資訊安全，不必一次問完所有問題。`,
+    next: 's3_from_b'
+  },
+
+  s3_from_a: {
+    chapter: '片三 · 婆婆想改變甚麼',
+    bg: 'linear-gradient(135deg, #2a2a1a 0%, #4a4a20 100%)',
+    speaker: '',
+    text: `同日下午，飯廳。
+
+阿寶：「我頭先問得太急。你唔想講付款，可以遲啲再講。我想先聽，有冇一樣係你自己都想改善？」`,
+    next: 's3_common'
+  },
+
+  s3_from_b: {
+    chapter: '片三 · 婆婆想改變甚麼',
+    bg: 'linear-gradient(135deg, #2a2a1a 0%, #4a4a20 100%)',
+    speaker: '',
+    text: `同日下午，飯廳。`,
+    next: 's3_common'
+  },
+
+  s3_common: {
+    speaker: '',
+    text: `Go婆婆：「我唔想戒晒，我真係鍾意睇。但我都想朝早有精神，同黃太飲茶。」
+
+阿寶：「即係你想保留睇劇，但唔想搞到第二日咁攰。」
+
+Go婆婆：「係。唔係一定要完全唔睇吖嘛？」
+
+（畫面停格）`,
+    next: 'c3'
+  },
+
+  c3: {
+    chapter: '片三 · 選擇三',
+    speaker: '',
+    text: `下一步，你會提出甚麼？`,
+    choices: [
+      { text: 'A.「刪咗個App，夜晚電話交畀我。」', next: 'c3a', effect: { type: 'A' } },
+      { text: 'B.「先試一兩個改變，試一星期。」', next: 'c3b', effect: { type: 'B' } }
+    ]
+  },
+
+  c3a: {
+    bg: 'linear-gradient(135deg, #2a1a1a 0%, #4a2020 100%)',
+    speaker: '',
+    text: `阿寶：「你自己停唔到，唯有刪App。夜晚電話交畀我。」
+
+Go婆婆：「你頭先先話一齊，而家咪又係你話事！」
+
+阿寶：「唔係咁，你一定又睇！」
+
+Go婆婆：「咁我以後唔同你講。」
+
+阿寶旁白：我好想快啲解決問題，但可能太快跳到自己想要嘅答案。`,
+    next: 'ending'
+  },
+
+  c3b: {
+    bg: 'linear-gradient(135deg, #1a2a1a 0%, #204a20 100%)',
+    speaker: '',
+    text: `阿寶：「唔使一下子戒晒。你想先試邊樣：停看時間、關自動播放，定係付款設定？」
+
+Go婆婆：「先關自動播放。佢一路播，我就一路睇。」
+
+阿寶：「好。停看時間，你覺得點樣係做得到？」
+
+Go婆婆：「十一點半。十一點就太早。」
+
+阿寶：「先試十一點半，設個提示。之後電話留喺客廳充電，得唔得？」
+
+Go婆婆：「得，但我有嘢做，又想睇返。」
+
+阿寶：「停咗之後，你想聽歌，定睇真報紙？」
+
+Go婆婆：「聽歌啦。」
+
+阿寶：「好。我哋試七日，到時再睇邊樣有用。星期三我有時間，可以陪你去中心問手機班。其他日子我未必晚晚陪到，但可以約三晚，食飯嗰陣傾吓計。」
+
+Go婆婆：「你都要放低你部電話。」
+
+阿寶（笑）：「公平，我都放低。」
+
+—— 教學停格三 ——
+共同目標 + 小步改變 + 替代活動 + 檢討時間。
+阿寶提供支援，也清楚交代自己的時間與能力。`,
+    next: 'seven_day'
+  },
+
+  seven_day: {
+    chapter: '七日試行卡',
+    bg: 'linear-gradient(135deg, #1a2a2a 0%, #204a4a 100%)',
+    speaker: '',
+    text: `共同商議的安排：
+
+• 觀看設定：關閉自動播放
+• 停看時間：晚上十一點半，先設提示
+• 睡前安排：手機留在客廳充電，改為聽歌
+• 真人連結：恢復一次飲茶；每週三晚與阿寶用餐聊天
+• 技術支援：了解付款紀錄及訂閱設定
+• 檢討時間：七日後再傾，困難可以講，安排可以調整`,
+    next: 'ending'
+  }
+};
+
+/* ============================================================
+   引擎邏輯
+   ============================================================ */
+
+const TYPE_SPEED = 14;
+
+let aCount = 0;
+let bCount = 0;
+let currentNodeId = null;
+let typingTimer = null;
+let typingCallback = null;
+let isTyping = false;
+let currentFullText = '';
+let waitingChoice = false;
+
+const $ = id => document.getElementById(id);
+const stageEl = $('stage');
+const chapterEl = $('chapter');
+const speakerEl = $('speaker');
+const textEl = $('text');
+const hintEl = $('hint');
+const choicesEl = $('choices');
+const restartBtn = $('restart-btn');
+
+function typeText(text, callback) {
+  textEl.textContent = '';
+  currentFullText = text;
+  typingCallback = callback;
+  isTyping = true;
+  let i = 0;
+
+  typingTimer = setInterval(() => {
+    textEl.textContent += text[i];
+    i++;
+    if (i >= text.length) {
+      clearInterval(typingTimer);
+      isTyping = false;
+      const cb = typingCallback;
+      typingCallback = null;
+      cb && cb();
+    }
+  }, TYPE_SPEED);
+}
+
+function finishTyping() {
+  if (!isTyping) return;
+  clearInterval(typingTimer);
+  textEl.textContent = currentFullText;
+  isTyping = false;
+  const cb = typingCallback;
+  typingCallback = null;
+  cb && cb();
+}
+
+function hideChoices() {
+  choicesEl.style.display = 'none';
+  choicesEl.innerHTML = '';
+  waitingChoice = false;
+}
+
+function showChoices(choices) {
+  choicesEl.innerHTML = '';
+  choicesEl.style.display = 'flex';
+  waitingChoice = true;
+  hintEl.textContent = '';
+
+  choices.forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = choice.text;
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      hideChoices();
+      if (choice.effect && choice.effect.type === 'A') aCount++;
+      if (choice.effect && choice.effect.type === 'B') bCount++;
+      goTo(choice.next);
+    });
+    choicesEl.appendChild(btn);
+  });
+}
+
+function showEnding() {
+  let chapter, bg, text;
+
+  if (aCount === 3) {
+    chapter = '結局一 · 關係受壓';
+    bg = 'linear-gradient(135deg, #2a0a0a 0%, #4a1010 100%)';
+    text = `（阿寶經過房門，看見Go婆婆正看手機。Go婆婆立即把螢幕反扣。）
+
+Go婆婆：「冇嘢，你唔使問。」
+
+阿寶旁白：問題好似冇再出現，但其實只係我睇唔到。下一步，我需要先修補關係，亦可能要搵人一齊幫手。
+
+片尾字幕：
+不只問「睇咗幾耐」，也要了解「生活有否受影響」。
+先理解需要，再共同訂立小改變。
+關顧婆婆，也關顧照顧者；遇到持續的健康、財務或家庭衝突問題，不必獨自承擔，可以尋求支援。`;
+  } else if (bCount === 1) {
+    chapter = '結局二 · 仍有阻力';
+    bg = 'linear-gradient(135deg, #2a1a0a 0%, #4a3010 100%)';
+    text = `Go婆婆：「我有兩晚早咗停，但有晚又睇到一點。」
+
+阿寶（停一停）：「我係有啲擔心，但唔想再關你。邊晚最難停呢係？」
+
+阿寶旁白：改變唔係一條直線。我哋仲要了解難處，而唔係只問做唔做到。
+
+片尾字幕：
+不只問「睇咗幾耐」，也要了解「生活有否受影響」。
+先理解需要，再共同訂立小改變。
+關顧婆婆，也關顧照顧者；遇到持續的健康、財務或家庭衝突問題，不必獨自承擔，可以尋求支援。`;
+  } else {
+    chapter = '結局三 · 開始合作';
+    bg = 'linear-gradient(135deg, #0a2a1a 0%, #104a30 100%)';
+    let prefix = '';
+    if (aCount > 0) {
+      prefix = `阿寶：「婆婆，之前我語氣重咗，對唔住。我哋再傾過，好唔好？」\n\n`;
+    }
+    text = `${prefix}Go婆婆：「關咗自動播放，真係易停啲。不過十一點半，我有兩晚都做唔到。」
+
+阿寶：「多謝你肯講。係提示唔清楚，定嗰集啱啱好緊張？」
+
+Go婆婆：「好緊張嗰集。下次提示一響，我試下唔開新一集。」
+
+阿寶：「好，我哋再試。」
+
+（手機彈出新一集通知，Go婆婆看一眼，放下手機。）
+
+Go婆婆：「聽日先。黃太約咗我飲茶。」
+
+阿寶：「好。聽朝你想食乜？」
+
+Go婆婆（笑）：「今次唔求其，我想食...」
+
+阿寶：「收到。」
+
+（阿寶把自己的手機放下，坐到Go婆婆旁邊。）
+
+片尾字幕：
+不只問「睇咗幾耐」，也要了解「生活有否受影響」。
+先理解需要，再共同訂立小改變。
+關顧婆婆，也關顧照顧者；遇到持續的健康、財務或家庭衝突問題，不必獨自承擔，可以尋求支援。`;
+  }
+
+  stageEl.style.background = bg;
+  chapterEl.textContent = chapter;
+  speakerEl.textContent = '';
+  hideChoices();
+  restartBtn.style.display = 'none';
+  hintEl.textContent = '';
+
+  typeText(text, () => {
+    hintEl.textContent = '—— 完 ——';
+    restartBtn.style.display = 'block';
+  });
+}
+
+function goTo(nodeId) {
+  if (nodeId === 'ending') {
+    showEnding();
+    return;
+  }
+
+  const node = storyData[nodeId];
+  if (!node) return;
+
+  currentNodeId = nodeId;
+
+  if (node.bg) stageEl.style.background = node.bg;
+  if (node.chapter) chapterEl.textContent = node.chapter;
+
+  speakerEl.textContent = node.speaker || '';
+  hideChoices();
+  restartBtn.style.display = 'none';
+  hintEl.textContent = '';
+
+  typeText(node.text, () => {
+    if (node.choices) {
+      showChoices(node.choices);
+    } else if (node.next) {
+      hintEl.textContent = '點擊繼續 ▾';
+    } else {
+      hintEl.textContent = '—— 完 ——';
+      restartBtn.style.display = 'block';
+    }
+  });
+}
+
+stageEl.addEventListener('click', e => {
+  if (e.target.closest('#choices') || e.target.closest('#restart-btn')) return;
+
+  if (isTyping) {
+    finishTyping();
+    return;
+  }
+  if (waitingChoice) return;
+
+  const node = storyData[currentNodeId];
+  if (node && node.next) goTo(node.next);
+});
+
+restartBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  aCount = 0;
+  bCount = 0;
+  goTo('start');
+});
+
+goTo('start');
+</script>
+</body>
+</html>
